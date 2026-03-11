@@ -9,3 +9,6 @@ RSN is a recursive predictive architecture based on spatial node mapping and hig
 RSN theoretical documentation:
 
 https://github.com/SemDLeo/RSN-Recursive-Spatial-Network
+=======
+# RSN Engine
+RSN (Recursive Spatial Network) — A recursive spatial prediction architecture based on high-dimensional state representation.
