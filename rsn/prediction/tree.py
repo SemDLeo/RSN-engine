@@ -4,16 +4,19 @@ import torch
 import numpy as np
 from rsn.core.node import RSNNode
 
-def expand_node(node, transition_model, value_model, branch_factor=3, sigma=0.05):
+def expand_node(node, transition_model, value_model, branch_factor=3):
 
     for _ in range(branch_factor):
 
         x = torch.tensor(node.features, dtype=torch.float32)
 
-        mu = transition_model(x).detach().numpy()
+        mu, logvar = transition_model(x)
 
-        noise = np.random.normal(0, sigma, size=mu.shape)
-        next_features = mu + noise
+        mu = mu.detach().numpy()
+        sigma = np.exp(0.5 * logvar.detach().numpy())
+
+        # Sample next features from the predicted distribution
+        next_features = np.random.normal(mu, sigma)
 
         child = RSNNode(next_features, parent=node, depth=node.depth + 1)
 

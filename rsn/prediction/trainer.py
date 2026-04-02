@@ -9,37 +9,105 @@ from rsn.prediction.value_model import ValueModel
 from rsn.prediction.dataset import load_btc_dataset
 
 
-def train(data_path):
+# =========================
+# Gaussian Negative Log Likelihood
+# =========================
+def gaussian_nll(mu, logvar, target):
+    """
+    mu: predicted mean
+    logvar: predicted log variance
+    target: ground truth
+    """
+    return torch.mean(
+        0.5 * logvar + (target - mu) ** 2 / (2 * torch.exp(logvar) + 1e-8)
+    )
 
+
+# =========================
+# Training Function
+# =========================
+def train(data_path, epochs=30, lr=1e-3):
+
+    print("Loading dataset...")
     X, Y = load_btc_dataset(data_path)
 
-    transition_model = TransitionModel()
-    value_model = ValueModel()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    X = X.to(device)
+    Y = Y.to(device)
+
+    print("Device:", device)
+    print("Dataset size:", X.shape)
+
+    # =========================
+    # Models
+    # =========================
+    transition_model = TransitionModel().to(device)
+    value_model = ValueModel().to(device)
+
+    # =========================
+    # Optimizer
+    # =========================
     optimizer = optim.Adam(
         list(transition_model.parameters()) +
         list(value_model.parameters()),
-        lr=1e-3
+        lr=lr
     )
 
-    loss_fn = nn.MSELoss()
+    mse_loss = nn.MSELoss()
 
-    for epoch in range(20):
+    # =========================
+    # Training Loop
+    # =========================
+    for epoch in range(epochs):
+
         optimizer.zero_grad()
 
-        pred_next = transition_model(X)
-        pred_value = value_model(X).squeeze()
+        # ---- Transition Model ----
+        mu, logvar = transition_model(X)
 
-        loss1 = loss_fn(pred_next, Y)
-        loss2 = loss_fn(pred_value, Y[:, 0])
+        # Important: limit logvar to prevent extreme values (stability)
+        logvar = torch.clamp(logvar, min=-10, max=10)
 
-        loss = loss1 + loss2
+        loss_transition = gaussian_nll(mu, logvar, Y)
+
+        # ---- Value Model ----
+        value_pred = value_model(X).squeeze()
+
+        # use the future price (Y[:, 0]) as the target for value model
+        loss_value = mse_loss(value_pred, Y[:, 0])
+
+        # ---- Total Loss ----
+        loss = loss_transition + loss_value
+
         loss.backward()
+
+        # Gradient clipping for stability
+        torch.nn.utils.clip_grad_norm_(
+            list(transition_model.parameters()) +
+            list(value_model.parameters()),
+            max_norm=1.0
+        )
+
         optimizer.step()
 
-        print(f"Epoch {epoch+1}, Loss: {loss.item():.6f}")
+        # =========================
+        # Logging
+        # =========================
+        if (epoch + 1) % 1 == 0:
+            print(
+                f"Epoch {epoch+1}/{epochs} | "
+                f"Total Loss: {loss.item():.6f} | "
+                f"Transition: {loss_transition.item():.6f} | "
+                f"Value: {loss_value.item():.6f}"
+            )
 
+    # =========================
+    # Save Models
+    # =========================
     torch.save(transition_model.state_dict(), "transition.pth")
     torch.save(value_model.state_dict(), "value.pth")
 
-    print("Models saved.")
+    print("✅ Models saved:")
+    print(" - transition.pth")
+    print(" - value.pth")
