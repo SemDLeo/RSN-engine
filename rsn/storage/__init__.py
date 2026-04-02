@@ -4,4 +4,4 @@ Storage module for RSN Engine
 Handles distributed storage nodes.
 """
 
-from .storage import NodeRetrieval
+from .storage import RSNStorage

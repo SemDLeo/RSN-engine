@@ -1,17 +1,15 @@
-# rsn/prediction/transition_model.py
+# rsn/prediction/value_model.py
 
 import torch
 import torch.nn as nn
 
-class TransitionModel(nn.Module):
+class ValueModel(nn.Module):
     def __init__(self, input_dim=6):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, 64),
             nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, input_dim)
+            nn.Linear(64, 1)
         )
 
     def forward(self, x):
