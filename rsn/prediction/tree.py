@@ -2,28 +2,44 @@
 
 import torch
 import numpy as np
-from rsn.core.node import RSNNode
+from rsn.core.node import Node
+
 
 def expand_node(node, transition_model, value_model, branch_factor=3):
 
-    for _ in range(branch_factor):
+    x = torch.tensor(node.state, dtype=torch.float32).unsqueeze(0)
 
-        x = torch.tensor(node.features, dtype=torch.float32)
+    for _ in range(branch_factor):
 
         mu, logvar = transition_model(x)
 
-        mu = mu.detach().numpy()
-        sigma = np.exp(0.5 * logvar.detach().numpy())
+        mu = mu.item()
+        sigma = np.exp(0.5 * logvar.item())
 
-        # Sample next features from the predicted distribution
-        next_features = np.random.normal(mu, sigma)
+        # 🔥 sample return
+        r = np.random.normal(mu, sigma)
 
-        child = RSNNode(next_features, parent=node, depth=node.depth + 1)
+        current_price = node.metadata["price"]
+        next_price = current_price * (1 + r)
 
-        value = value_model(torch.tensor(next_features, dtype=torch.float32)).item()
+        next_state = node.state.copy()
+        next_state[0] = next_price  # 更新Close
+
+        child = Node(
+            state=next_state,
+            parent=node,
+            depth=node.depth + 1,
+            metadata={
+                "price": next_price,
+                "return": r,
+                "cum_return": node.metadata.get("cum_return", 1.0) * (1 + r)
+            }
+        )
+
+        value = value_model(torch.tensor(next_state, dtype=torch.float32)).item()
         child.value = value
 
-        node.children.append(child)
+        node.add_child(child)
 
 
 def build_tree(root, transition_model, value_model, depth_limit=3):
